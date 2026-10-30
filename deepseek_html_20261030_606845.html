@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#f8f7f2">
+<title>个人SOP决策本</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<script>
+tailwind.config = {
+  theme: {
+    extend: {
+      colors: {
+        primary: '#5b7c99',
+        ok: '#68a87c',
+        warn: '#d47060',
+        soft: '#f8f7f2',
+      },
+      fontFamily: { sans: ['system-ui', 'sans-serif'] }
+    }
+  }
+}
+</script>
+<style>
+*{ -webkit-tap-highlight-color: transparent; }
+.tab-active{ border-bottom:2px solid #5b7c99; color:#5b7c99; font-weight:500; }
+.card-shadow{ box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+.group-header{ cursor:pointer; }
+.tag-header{ cursor:pointer; }
+.rotate{ transform: rotate(180deg); transition: 0.2s; }
+</style>
+</head>
+<body class="bg-soft min-h-screen text-slate-700">
+<div class="max-w-xl mx-auto p-4 pb-24">
+  <header class="py-4 mb-4">
+    <h1 class="text-xl font-semibold text-primary">个人SOP决策本</h1>
+    <p class="text-sm text-slate-500">品类分组 · 标签合并 · 两级折叠 · 逐项核对</p>
+  </header>
+
+  <div id="storageWarn" class="hidden mb-4 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg p-3 leading-relaxed"></div>
+
+  <div class="flex gap-4 border-b border-slate-200 mb-6 overflow-x-auto">
+    <button onclick="switchTab('add')" id="tab-add" class="py-2 tab-active whitespace-nowrap">新增/编辑</button>
+    <button onclick="switchTab('list')" id="tab-list" class="py-2 whitespace-nowrap">SOP库</button>
+    <button onclick="switchTab('thesaurus')" id="tab-thesaurus" class="py-2 whitespace-nowrap">同义词</button>
+    <button onclick="switchTab('judge')" id="tab-judge" class="py-2 whitespace-nowrap">购买判断</button>
+    <button onclick="switchTab('check')" id="tab-check" class="py-2 whitespace-nowrap">检查核对</button>
+  </div>
+
+  <!-- 新增&编辑页 -->
+  <div id="page-add">
+    <div class="bg-white rounded-xl p-5 card-shadow">
+      <input type="hidden" id="editId">
+      <div class="mb-4">
+        <label class="text-sm block mb-1">品类（输入新名称自动新增）</label>
+        <input id="cate" class="w-full border border-slate-200 rounded-lg p-2.5" list="cateList">
+        <datalist id="cateList"></datalist>
+      </div>
+      <div class="mb-4">
+        <label class="text-sm block mb-1">品类标记颜色</label>
+        <div class="flex gap-2 flex-wrap">
+          <label class="flex items-center gap-1"><input type="radio" name="cateColor" value="#5b7c99" checked>蓝</label>
+          <label class="flex items-center gap-1"><input type="radio" name="cateColor" value="#68a87c">绿</label>
+          <label class="flex items-center gap-1"><input type="radio" name="cateColor" value="#d47060">红</label>
+          <label class="flex items-center gap-1"><input type="radio" name="cateColor" value="#c29467">橙</label>
+          <label class="flex items-center gap-1"><input type="radio" name="cateColor" value="#8b72b8">紫</label>
+          <label class="flex items-center gap-1"><input type="radio" name="cateColor" value="#6b7280">灰</label>
+        </div>
+      </div>
+      <div class="mb-4">
+        <label class="text-sm block mb-1">标签（逗号分隔，相同标签自动合并分组）</label>
+        <input id="tags" class="w-full border border-slate-200 rounded-lg p-2.5" placeholder="棉,精梳棉,羊毛">
+      </div>
+      <div class="mb-4">
+        <label class="text-sm block mb-1">✅准入条件（每行一条，核对页会逐项打勾）</label>
+        <textarea id="allow" rows="3" class="w-full border border-slate-200 rounded-lg p-2.5" placeholder="含棉量≥95%&#10;克重≥200g"></textarea>
+      </div>
+      <div class="mb-4">
+        <label class="text-sm block mb-1">❌排除条件（每行一条，核对页会逐项打勾）</label>
+        <textarea id="deny" rows="3" class="w-full border border-slate-200 rounded-lg p-2.5" placeholder="聚酯纤维&#10;再生棉"></textarea>
+      </div>
+      <div class="mb-5">
+        <label class="text-sm block mb-1">备注</label>
+        <textarea id="note" rows="2" class="w-full border border-slate-200 rounded-lg p-2.5"></textarea>
+      </div>
+      <div class="flex gap-3">
+        <button onclick="saveItem()" class="flex-1 bg-primary text-white rounded-lg py-2.5">保存</button>
+        <button onclick="clearEdit()" class="flex-1 border border-slate-300 rounded-lg py-2.5">清空</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- SOP库：两级折叠 -->
+  <div id="page-list" class="hidden">
+    <div class="mb-4 flex gap-2">
+      <input id="searchInput" class="flex-1 bg-white border border-slate-200 rounded-lg p-2.5" placeholder="输入关键词，点右侧搜索" onkeydown="if(event.key==='Enter') doSearch()">
+      <button onclick="doSearch()" class="bg-primary text-white rounded-lg px-4 py-2">搜索</button>
+    </div>
+    <div id="listWrap" class="grid gap-4"></div>
+    <div class="mt-6 flex gap-3">
+      <button onclick="exportJson()" class="flex-1 border border-primary text-primary py-2 rounded-lg">导出备份</button>
+      <label class="flex-1">
+        <span class="block text-center border border-primary text-primary py-2 rounded-lg cursor-pointer">导入备份</span>
+        <input type="file" id="importFile" accept=".json" class="hidden" onchange="importJson(this)">
+      </label>
+    </div>
+  </div>
+
+  <!-- 同义词管理页 -->
+  <div id="page-thesaurus" class="hidden">
+    <div class="bg-white rounded-xl p-5 card-shadow mb-4">
+      <div class="mb-4">
+        <label class="text-sm block mb-1">标准词</label>
+        <input id="stdWord" class="w-full border border-slate-200 rounded-lg p-2.5" placeholder="例：粘胶">
+      </div>
+      <div class="mb-4">
+        <label class="text-sm block mb-1">同义词（逗号分隔）</label>
+        <input id="synWords" class="w-full border border-slate-200 rounded-lg p-2.5" placeholder="粘纤,人造棉">
+      </div>
+      <button onclick="addSynonym()" class="w-full bg-primary text-white rounded-lg py-2.5">添加同义词映射</button>
+    </div>
+    <div id="synWrap" class="grid gap-3"></div>
+  </div>
+
+  <!-- 判断页 -->
+  <div id="page-judge" class="hidden">
+    <div class="bg-white rounded-xl p-5 card-shadow">
+      <div class="mb-4">
+        <label class="text-sm block mb-1">目标品类</label>
+        <select id="jCate" class="w-full border border-slate-200 rounded-lg p-2.5"></select>
+      </div>
+      <div class="mb-4">
+        <label class="text-sm block mb-1">内容文本（粘贴描述）</label>
+        <textarea id="jText" rows="3" class="w-full border border-slate-200 rounded-lg p-2.5"></textarea>
+      </div>
+      <div class="mb-4">
+        <label class="text-sm block mb-1">豆包API Key（留空=离线匹配）</label>
+        <input id="apiKey" class="w-full border border-slate-200 rounded-lg p-2.5">
+      </div>
+      <button onclick="judge()" class="w-full bg-primary text-white rounded-lg py-2.5">开始判断</button>
+      <div id="judgeResult" class="mt-5 whitespace-pre-line"></div>
+    </div>
+  </div>
+
+  <!-- 检查核对页 -->
+  <div id="page-check" class="hidden">
+    <div class="bg-white rounded-xl p-5 card-shadow mb-4">
+      <div class="mb-3">
+        <label class="text-sm block mb-1">选择品类</label>
+        <select id="ckCate" class="w-full border border-slate-200 rounded-lg p-2.5" onchange="loadCheckItems()"></select>
+      </div>
+      <div id="ckItemList" class="grid gap-2"></div>
+      <div class="flex gap-2 mt-4">
+        <button onclick="startCheck()" class="flex-1 bg-primary text-white rounded-lg py-2.5">生成核对清单</button>
+        <button onclick="resetCheck()" class="flex-1 border border-slate-300 rounded-lg py-2.5">重置</button>
+      </div>
+    </div>
+    <div id="ckRun"></div>
+  </div>
+</div>
+
+<div id="toast" class="fixed left-1/2 -translate-x-1/2 bottom-6 px-4 py-2 rounded-lg text-white text-sm opacity-0 pointer-events-none transition-opacity duration-300 z-50"></div>
+
+<script>
+// ========== 通用小工具 ==========
+function esc(s){
+  return String(s == null ? '' : s).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+function escJs(s){
+  return String(s == null ? '' : s).replace(/\\/g,'\\\\').replace(/'/g,"\\'");
+}
+function splitConds(text){
+  if(!text) return [];
+  return text.split(/[\n\r;；]+/)
+    .map(s=> s.replace(/^\s*(?:[-•·*]|\d+[.)、）])\s*/, '').trim())
+    .filter(s=> s.length > 0);
+}
+let toastTimer = null;
+function showToast(msg, type){
+  const el = document.getElementById('toast');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.backgroundColor = type === 'error' ? '#d47060' : (type === 'warn' ? '#c29467' : '#68a87c');
+  el.classList.remove('opacity-0');
+  el.classList.add('opacity-100');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(()=>{
+    el.classList.remove('opacity-100');
+    el.classList.add('opacity-0');
+  }, 2200);
+}
+
+// ========== 存储层：localStorage 同步 + 内存兜底 ==========
+const LS_KEY = "sopDB_v2_data";
+
+let store = { items: [], syns: [] };
+let nextId = { items: 1, syns: 1 };
+let lsAvailable = false;
+let lsError = '';
+
+function detectStorage(){
+  try{
+    const t = '__sop_probe__' + Date.now();
+    localStorage.setItem(t, '1');
+    localStorage.removeItem(t);
+    lsAvailable = true;
+    lsError = '';
+  }catch(e){
+    lsAvailable = false;
+    lsError = (e && e.message) ? e.message : String(e);
+  }
+}
+
+function loadStore(){
+  detectStorage();
+  if(lsAvailable){
+    try{
+      const raw = localStorage.getItem(LS_KEY);
+      if(raw){
+        const p = JSON.parse(raw);
+        store.items = Array.isArray(p.items) ? p.items : [];
+        store.syns  = Array.isArray(p.syns)  ? p.syns  : [];
+      }
+    }catch(e){
+      console.warn('读取本地数据失败', e);
+    }
+  }
+  recalcIds();
+}
+
+function recalcIds(){
+  nextId.items = Math.max(0, ...store.items.map(x=>Number(x.id)||0)) + 1;
+  nextId.syns  = Math.max(0, ...store.syns.map(x=>Number(x.id)||0)) + 1;
+}
+
+function persist(){
+  if(!lsAvailable) return false;
+  try{
+    localStorage.setItem(LS_KEY, JSON.stringify(store));
+    return true;
+  }catch(e){
+    lsError = (e && e.message) ? e.message : String(e);
+    console.warn('写入本地数据失败', e);
+    return false;
+  }
+}
+
+// 同步增删改查
+function getAllItems(){ return store.items.slice(); }
+function getAllSyn(){ return store.syns.slice(); }
+
+function addItemRecord(item){
+  const rec = {...item, id: nextId.items++};
+  store.items.push(rec);
+  return { rec, saved: persist() };
+}
+function putItemRecord(item){
+  const idx = store.items.findIndex(x=>x.id === item.id);
+  if(idx >= 0) store.items[idx] = {...item};
+  else store.items.push({...item});
+  return persist();
+}
+function deleteItemRecord(id){
+  store.items = store.items.filter(x=>x.id !== id);
+  return persist();
+}
+function getItemRecord(id){
+  const found = store.items.find(x=>x.id === id);
+  return found ? {...found} : null;
+}
+function addSynRecord(s){
+  const rec = {...s, id: nextId.syns++};
+  store.syns.push(rec);
+  return { rec, saved: persist() };
+}
+function deleteSynRecord(id){
+  store.syns = store.syns.filter(x=>x.id !== id);
+  return persist();
+}
+
+// ========== 两级折叠状态 ==========
+let cateFold = {};
+let tagFold = {};
+let lastQuery = null;
+
+// ========== 页面切换 ==========
+function switchTab(tab){
+  document.querySelectorAll('[id^="page-"]').forEach(p=>p.classList.add('hidden'));
+  document.getElementById('page-'+tab).classList.remove('hidden');
+  document.querySelectorAll('[id^="tab-"]').forEach(b=>b.classList.remove('tab-active'));
+  document.getElementById('tab-'+tab).classList.add('tab-active');
+  if(tab==='list') renderList('');
+  if(tab==='judge') fillJudgeCate();
+  if(tab==='add') fillCateDatalist();
+  if(tab==='thesaurus') renderSyn();
+  if(tab==='check') fillCheckCate();
+}
+
+// ========== 同义词库 ==========
+function addSynonym(){
+  const std = document.getElementById('stdWord').value.trim();
+  const synRaw = document.getElementById('synWords').value.trim();
+  if(!std) return alert("标准词不能为空");
+  const { saved } = addSynRecord({ std, syn: synRaw });
+  document.getElementById('stdWord').value='';
+  document.getElementById('synWords').value='';
+  renderSyn();
+  if(saved) showToast('✅ 同义词已保存');
+  else alert('⚠️ 已添加到当前页面，但无法写入本机存储（' + lsError + '）。刷新后会丢失。');
+}
+
+function delSyn(id){
+  if(!confirm("确定删除这条同义词吗？")) return;
+  const saved = deleteSynRecord(id);
+  renderSyn();
+  if(saved) showToast('已删除');
+}
+
+function renderSyn(){
+  const all = getAllSyn();
+  const wrap = document.getElementById('synWrap');
+  wrap.innerHTML='';
+  if(all.length===0){
+    wrap.innerHTML = `<div class="bg-white p-4 rounded-xl card-shadow text-center text-slate-400">暂无同义词记录</div>`;
+    return;
+  }
+  all.forEach(s=>{
+    wrap.innerHTML += `
+    <div class="bg-white p-3 rounded-xl card-shadow flex justify-between items-center">
+      <div><span class="font-medium">${esc(s.std)}</span> ← ${esc(s.syn)}</div>
+      <button onclick="delSyn(${s.id})" class="text-warn text-sm">删除</button>
+    </div>`
+  });
+}
+
+function normalizeText(text){
+  let out = text;
+  getAllSyn().forEach(s=>{
+    const arr = (s.syn||'').split(',').map(x=>x.trim()).filter(x=>x);
+    arr.forEach(word=>{
+      const reg = new RegExp(word,"gi");
+      out = out.replace(reg, s.std);
+    });
+  });
+  return out;
+}
+
+// ========== SOP条目增删改 ==========
+function saveItem(){
+  const editId = document.getElementById('editId').value;
+  const colorEl = document.querySelector('input[name="cateColor"]:checked');
+  const item = {
+    cate: document.getElementById('cate').value.trim(),
+    cateColor: colorEl ? colorEl.value : '#5b7c99',
+    tags: document.getElementById('tags').value.trim(),
+    allow: document.getElementById('allow').value,
+    deny: document.getElementById('deny').value,
+    note: document.getElementById('note').value,
+    createAt: new Date().toLocaleString()
+  };
+  if(!item.cate){
+    alert("品类不能为空");
+    return;
+  }
+
+  let saved;
+  if(editId){
+    item.id = Number(editId);
+    saved = putItemRecord(item);
+  }else{
+    saved = addItemRecord(item).saved;
+  }
+
+  clearEdit();
+  fillCateDatalist();
+
+  if(saved){
+    showToast('✅ 已保存');
+  }else{
+    alert('⚠️ 已添加到当前页面，但无法写入本机存储（' + lsError + '）。\n刷新后会丢失，请立即使用「SOP库 → 导出备份」保存数据。');
+  }
+}
+
+function clearEdit(){
+  document.getElementById('editId').value='';
+  document.getElementById('cate').value='';
+  document.getElementById('tags').value='';
+  document.getElementById('allow').value='';
+  document.getElementById('deny').value='';
+  document.getElementById('note').value='';
+}
+
+function editItem(id){
+  const it = getItemRecord(id);
+  if(!it) return;
+  document.getElementById('editId').value = it.id;
+  document.getElementById('cate').value = it.cate;
+  const colorRadio = document.querySelector(`input[name="cateColor"][value="${it.cateColor||'#5b7c99'}"]`);
+  if(colorRadio) colorRadio.checked = true;
+  document.getElementById('tags').value = it.tags || '';
+  document.getElementById('allow').value = it.allow || '';
+  document.getElementById('deny').value = it.deny || '';
+  document.getElementById('note').value = it.note || '';
+  switchTab('add');
+}
+
+function del(id){
+  if(!confirm("确定删除这条SOP吗？")) return;
+  const saved = deleteItemRecord(id);
+  doSearch();
+  if(saved) showToast('已删除');
+}
+
+function fillCateDatalist(){
+  const cates = [...new Set(store.items.map(x=>x.cate))];
+  const dl = document.getElementById('cateList');
+  dl.innerHTML = '';
+  cates.forEach(c=> dl.innerHTML += `<option value="${esc(c)}">`);
+}
+
+function fillJudgeCate(){
+  const cates = [...new Set(store.items.map(x=>x.cate))];
+  const sel = document.getElementById('jCate');
+  sel.innerHTML = '';
+  cates.forEach(c=> sel.innerHTML += `<option value="${esc(c)}">${esc(c)}</option>`);
+}
+
+function toggleCateFold(cateKey){
+  cateFold[cateKey] = !cateFold[cateKey];
+  doSearch();
+}
+function toggleTagFold(cateKey, tagKey){
+  const key = `${cateKey}||${tagKey}`;
+  tagFold[key] = !tagFold[key];
+  doSearch();
+}
+
+// ========== 搜索 + 两级折叠渲染 ==========
+function doSearch(){
+  const keyword = document.getElementById('searchInput').value;
+  const q = (keyword || '').trim().toLowerCase();
+  if(q !== lastQuery){
+    cateFold = {};
+    tagFold = {};
+    lastQuery = q;
+  }
+  renderList(keyword);
+}
+
+function renderList(keyword){
+  const q = (keyword || '').trim().toLowerCase();
+  const all = getAllItems();
+
+  const filtered = all.filter(i=>{
+    if(q === "") return true;
+    const hay = (i.cate + " " + (i.tags||'') + " " + (i.allow||'') + " " + (i.deny||'') + " " + (i.note||'')).toLowerCase();
+    return hay.includes(q);
+  });
+
+  const cateGroups = {};
+  filtered.forEach(it=>{
+    if(!cateGroups[it.cate]) cateGroups[it.cate] = {color: it.cateColor || '#5b7c99', list:[]};
+    cateGroups[it.cate].list.push(it);
+  });
+
+  const wrap = document.getElementById('listWrap');
+  wrap.innerHTML = '';
+
+  if(Object.keys(cateGroups).length === 0){
+    wrap.innerHTML = `<div class="bg-white p-6 rounded-xl card-shadow text-center text-slate-400">
+      ${q ? "未找到匹配的SOP条目" : "暂无SOP条目，去新增页面添加吧"}
+    </div>`;
+    return;
+  }
+
+  Object.keys(cateGroups).sort().forEach(cate=>{
+    if(cateFold[cate] === undefined) cateFold[cate] = true;
+    const cateOpen = cateFold[cate];
+    const color = cateGroups[cate].color;
+
+    const tagGroups = {};
+    cateGroups[cate].list.forEach(it=>{
+      const tagKey = it.tags || '未设置标签';
+      if(!tagGroups[tagKey]) tagGroups[tagKey] = [];
+      tagGroups[tagKey].push(it);
+    });
+
+    let tagHtml = '';
+    Object.keys(tagGroups).forEach(tag=>{
+      const tagKeyFull = `${cate}||${tag}`;
+      if(tagFold[tagKeyFull] === undefined) tagFold[tagKeyFull] = true;
+      const tagOpen = tagFold[tagKeyFull];
+
+      const itemsHtml = tagGroups[tag].map(it=>`
+        <div class="py-3 border-b border-slate-100 last:border-b-0">
+          <div class="text-sm mt-1 text-ok">✅${esc(it.allow||'无')}</div>
+          <div class="text-sm mt-1 text-warn">❌${esc(it.deny||'无')}</div>
+          <div class="text-sm mt-1 text-slate-500">备注：${esc(it.note||'无')}</div>
+          <div class="text-xs text-slate-400 mt-1">${esc(it.createAt||'')}</div>
+          <div class="flex gap-3 mt-2">
+            <button onclick="editItem(${it.id})" class="text-primary text-sm">编辑</button>
+            <button onclick="del(${it.id})" class="text-warn text-sm">删除</button>
+          </div>
+        </div>`).join('');
+
+      tagHtml += `
+        <div class="mt-3 rounded-lg border border-slate-100 overflow-hidden">
+          <div onclick="toggleTagFold('${escJs(cate)}','${escJs(tag)}')" class="tag-header px-3 py-2 bg-slate-50 flex justify-between items-center">
+            <span class="text-sm font-medium text-slate-600">🏷️ ${esc(tag)} <span class="text-xs text-slate-400">(${tagGroups[tag].length}条)</span></span>
+            <svg class="w-3.5 h-3.5 transition ${tagOpen?'rotate':''}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+            </svg>
+          </div>
+          <div class="px-3 ${tagOpen?'':'hidden'}">
+            ${itemsHtml}
+          </div>
+        </div>`
+    });
+
+    wrap.innerHTML += `
+    <div class="bg-white rounded-xl card-shadow overflow-hidden">
+      <div onclick="toggleCateFold('${escJs(cate)}')" class="group-header p-4 flex justify-between items-center" style="background-color:${color}18">
+        <span class="font-medium" style="color:${color}">📁 ${esc(cate)} <span class="text-xs text-slate-500">(${cateGroups[cate].list.length}条)</span></span>
+        <svg class="w-4 h-4 transition ${cateOpen?'rotate':''}" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"></path>
+        </svg>
+      </div>
+      <div class="p-4 pt-1 ${cateOpen?'':'hidden'}">
+        ${tagHtml}
+      </div>
+    </div>`
+  });
+}
+
+// ========== 购买判断 ==========
+async function judge(){
+  const jCate = document.getElementById('jCate').value;
+  let jText = document.getElementById('jText').value;
+  const key = document.getElementById('apiKey').value.trim();
+  jText = normalizeText(jText);
+  const matchItems = store.items.filter(i=>i.cate === jCate);
+  if(!matchItems.length){
+    document.getElementById('judgeResult').innerText = "⚠️该品类暂无SOP记录";
+    return;
+  }
+  if(!key){
+    let hitAllow = [], hitDeny=[];
+    matchItems.forEach(it=>{
+      const tks = (it.tags||'').split(',').map(x=>x.trim()).filter(x=>x);
+      tks.forEach(t=>{
+        if(jText.includes(t)){
+          if(it.allow) hitAllow.push(`【${t}】准入：${it.allow}`);
+          if(it.deny) hitDeny.push(`【${t}】排除：${it.deny}`);
+        }
+      });
+    });
+    let res = `【品类】${jCate}\n【标准化后文本】${jText}\n\n`;
+    if(hitDeny.length>0) res += `❌命中排除风险：\n${hitDeny.join('\n')}\n👉结论：不建议\n`;
+    else if(hitAllow.length>0) res += `✅命中准入条件：\n${hitAllow.join('\n')}\n👉结论：可以考虑\n`;
+    else res += `🟡未匹配明确规则，请查看SOP\n`;
+    res += `\n📜该品类全部细则：\n${matchItems.map(x=>`标签：${x.tags||'无'}｜准入：${x.allow||'无'}｜排除：${x.deny||'无'}`).join('\n')}`;
+    document.getElementById('judgeResult').innerText = res;
+  }else{
+    const sopText = matchItems.map(x=>`品类${x.cate}，标签${x.tags}，准入：${x.allow}，排除：${x.deny}，备注：${x.note}`).join('\n');
+    const prompt = `仅对照下面个人SOP判断，不要引入外部常识。SOP：${sopText}。品类${jCate}，描述：${jText}。输出：是否建议，命中哪些准入/排除，风险点`;
+    try{
+      const resp = await fetch("https://ark.cn-beijing.volces.com/api/v3/chat/completions",{
+        method:"POST",
+        headers:{"Authorization":`Bearer ${key}`,"Content-Type":"application/json"},
+        body:JSON.stringify({model:"doubao-lite-4k",messages:[{role:"user",content:prompt}]})
+      });
+      const d = await resp.json();
+      document.getElementById('judgeResult').innerText = d.choices?.[0]?.message?.content || "API调用失败";
+    }catch(err){
+      document.getElementById('judgeResult').innerText = "❌网络请求失败：" + err.message;
+    }
+  }
+}
+
+// ========== 检查核对 ==========
+let ckSelected = {};
+let ckSelectedCate = '';
+let ckCurrentItems = [];
+let ckResults = {};
+let ckTextMap = {};
+
+function fillCheckCate(){
+  const cates = [...new Set(store.items.map(x=>x.cate))];
+  const sel = document.getElementById('ckCate');
+  const old = sel.value;
+  sel.innerHTML = cates.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  if(old && cates.includes(old)) sel.value = old;
+  loadCheckItems();
+}
+
+function loadCheckItems(){
+  const cate = document.getElementById('ckCate').value;
+  const wrap = document.getElementById('ckItemList');
+  document.getElementById('ckRun').innerHTML = '';
+  ckCurrentItems = [];
+  ckResults = {};
+  ckTextMap = {};
+
+  if(ckSelectedCate !== cate){ ckSelected = {}; ckSelectedCate = cate; }
+
+  if(!cate){
+    wrap.innerHTML = `<div class="text-sm text-slate-400">暂无品类，请先新增SOP条目</div>`;
+    return;
+  }
+  const list = store.items.filter(i=>i.cate === cate);
+  if(!list.length){
+    wrap.innerHTML = `<div class="text-sm text-slate-400">该品类下暂无条目</div>`;
+    return;
+  }
+
+  wrap.innerHTML = `
+    <div class="flex justify-between items-center mb-1">
+      <span class="text-sm text-slate-500">勾选要核对的条目</span>
+      <span class="text-sm">
+        <button onclick="ckSelectAll(true)" class="text-primary">全选</button>
+        <button onclick="ckSelectAll(false)" class="text-slate-400 ml-2">全不选</button>
+      </span>
+    </div>` +
+    list.map(it=>{
+      const checked = ckSelected[it.id] !== false ? 'checked' : '';
+      return `<label class="flex items-start gap-2 bg-slate-50 rounded-lg p-2.5 cursor-pointer">
+        <input type="checkbox" ${checked} onchange="toggleCkSelect(${it.id}, this.checked)" class="mt-1">
+        <span class="text-sm flex-1">
+          <span class="font-medium">🏷️ ${esc(it.tags||'未设置标签')}</span>
+          <span class="block text-xs text-ok mt-0.5">准入：${esc(it.allow||'无')}</span>
+          <span class="block text-xs text-warn">排除：${esc(it.deny||'无')}</span>
+        </span>
+      </label>`;
+    }).join('');
+}
+
+function toggleCkSelect(id, checked){
+  ckSelected[id] = checked;
+  document.getElementById('ckRun').innerHTML = '';
+  ckCurrentItems = [];
+  ckResults = {};
+}
+
+function ckSelectAll(flag){
+  const cate = document.getElementById('ckCate').value;
+  store.items.filter(i=>i.cate===cate).forEach(i=>{ ckSelected[i.id] = flag; });
+  loadCheckItems();
+}
+
+function startCheck(){
+  const cate = document.getElementById('ckCate').value;
+  const list = store.items.filter(i=>i.cate===cate && ckSelected[i.id] !== false);
+  if(!list.length) return alert("请至少勾选一条SOP");
+  ckCurrentItems = list;
+  ckResults = {};
+  ckTextMap = {};
+  renderCheck();
+}
+
+function ckStyle(st, type){
+  if(st === 0) return {icon:'○', txtCls:'text-slate-600', bgCls:'bg-white hover:bg-slate-50'};
+  if(st === 1) return {icon:'✅', txtCls:'text-ok', bgCls:'bg-emerald-50'};
+  return {icon: type === 'd' ? '⚠️' : '❌', txtCls:'text-warn', bgCls:'bg-red-50'};
+}
+
+function ckRowHtml(key, text, st, type){
+  const s = ckStyle(st, type);
+  return `<div id="ckrow-${key}" onclick="cycleCk('${key}')" class="flex items-start gap-2 px-2 py-2 rounded-lg cursor-pointer select-none ${s.bgCls}">
+    <span class="text-sm w-5 text-center shrink-0">${s.icon}</span>
+    <span class="text-sm flex-1 ${s.txtCls}">${esc(text)}</span>
+  </div>`;
+}
+
+function renderCheck(){
+  const wrap = document.getElementById('ckRun');
+  if(!ckCurrentItems.length){ wrap.innerHTML = ''; return; }
+
+  let body = '';
+  ckCurrentItems.forEach(it=>{
+    const allows = splitConds(it.allow);
+    const denies = splitConds(it.deny);
+    let rows = '';
+
+    if(allows.length){
+      rows += `<div class="text-xs text-ok font-medium mt-3 mb-1">✅ 准入条件（点一下=符合，再点=不符合）</div>`;
+      allows.forEach((t,i)=>{
+        const key = `${it.id}|a|${i}`;
+        ckTextMap[key] = t;
+        rows += ckRowHtml(key, t, ckResults[key] || 0, 'a');
+      });
+    }
+    if(denies.length){
+      rows += `<div class="text-xs text-warn font-medium mt-3 mb-1">❌ 排除条件（点一下=未命中，再点=命中风险）</div>`;
+      denies.forEach((t,i)=>{
+        const key = `${it.id}|d|${i}`;
+        ckTextMap[key] = t;
+        rows += ckRowHtml(key, t, ckResults[key] || 0, 'd');
+      });
+    }
+    if(!allows.length && !denies.length){
+      rows = `<div class="text-sm text-slate-400 mt-2">该条无具体准入/排除条件</div>`;
+    }
+
+    body += `<div class="bg-white rounded-xl card-shadow mb-3 overflow-hidden">
+      <div class="px-4 py-2.5 bg-slate-50 flex justify-between items-center">
+        <span class="text-sm font-medium">🏷️ ${esc(it.tags||'未设置标签')}</span>
+        <span class="text-xs text-slate-400">${esc(it.cate)}</span>
+      </div>
+      <div class="px-3 pb-3">${rows}</div>
+    </div>`;
+  });
+
+  wrap.innerHTML = `
+    <div class="bg-white rounded-xl p-4 card-shadow mb-3">
+      <div class="flex justify-between text-sm mb-2">
+        <span>核对进度</span><span id="ckProgText" class="text-slate-500">0/0</span>
+      </div>
+      <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+        <div id="ckBar" class="h-full bg-primary transition-all" style="width:0%"></div>
+      </div>
+      <div id="ckConcl" class="mt-3 font-medium text-slate-500">—</div>
+    </div>` + body;
+
+  updateCheckSummary();
+}
+
+function computeStats(){
+  let total=0, done=0, risk=0, fail=0;
+  ckCurrentItems.forEach(it=>{
+    splitConds(it.allow).forEach((t,i)=>{
+      const st = ckResults[`${it.id}|a|${i}`] || 0;
+      total++; if(st) done++; if(st === 2) fail++;
+    });
+    splitConds(it.deny).forEach((t,i)=>{
+      const st = ckResults[`${it.id}|d|${i}`] || 0;
+      total++; if(st) done++; if(st === 2) risk++;
+    });
+  });
+  return {total, done, risk, fail};
+}
+
+function updateCheckSummary(){
+  const bar = document.getElementById('ckBar');
+  const txt = document.getElementById('ckProgText');
+  const concl = document.getElementById('ckConcl');
+  if(!bar || !txt || !concl) return;
+
+  const {total, done, risk, fail} = computeStats();
+  txt.innerText = `${done}/${total}`;
+  bar.style.width = (total ? (done/total*100) : 0) + '%';
+
+  let msg, cls;
+  if(risk > 0){ msg = `❌ 命中 ${risk} 条排除条件 → 不建议`; cls = 'text-warn'; }
+  else if(fail > 0){ msg = `⚠️ ${fail} 条准入条件不符合 → 谨慎考虑`; cls = 'text-warn'; }
+  else if(done < total){ msg = `🟡 还有 ${total - done} 项未核对`; cls = 'text-slate-500'; }
+  else { msg = `✅ 全部条件通过 → 建议购买`; cls = 'text-ok'; }
+
+  concl.className = 'mt-3 font-medium ' + cls;
+  concl.innerText = msg;
+}
+
+function cycleCk(key){
+  const st = ((ckResults[key] || 0) + 1) % 3;
+  ckResults[key] = st;
+  const type = key.split('|')[1];
+  const text = ckTextMap[key] || '';
+  const row = document.getElementById('ckrow-' + key);
+  if(row){
+    const s = ckStyle(st, type);
+    row.className = `flex items-start gap-2 px-2 py-2 rounded-lg cursor-pointer select-none ${s.bgCls}`;
+    row.innerHTML = `<span class="text-sm w-5 text-center shrink-0">${s.icon}</span>
+      <span class="text-sm flex-1 ${s.txtCls}">${esc(text)}</span>`;
+  }
+  updateCheckSummary();
+}
+
+function resetCheck(){
+  ckResults = {};
+  ckCurrentItems = [];
+  ckTextMap = {};
+  document.getElementById('ckRun').innerHTML = '';
+  loadCheckItems();
+}
+
+// ========== 导入导出 ==========
+function exportJson(){
+  try{
+    const out = { items: getAllItems(), syns: getAllSyn(), exportAt:new Date().toLocaleString(), version:2 };
+    const blob = new Blob([JSON.stringify(out,null,2)],{type:"application/json;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href=url;
+    a.download="SOP备份_"+new Date().toISOString().slice(0,10)+".json";
+    a.click();
+    URL.revokeObjectURL(url);
+    showToast('✅ 备份已导出');
+  }catch(err){
+    alert("❌导出失败：" + (err && err.message ? err.message : err));
+    console.error(err);
+  }
+}
+
+function importJson(input){
+  const f = input.files[0];
+  if(!f) return;
+  const reader = new FileReader();
+  reader.onload = e=>{
+    try{
+      const pack = JSON.parse(e.target.result);
+      let n = 0;
+      if(pack.items && pack.items.length>0){
+        for(const it of pack.items){
+          const rec = {...it};
+          delete rec.id;
+          rec.id = nextId.items++;
+          store.items.push(rec);
+          n++;
+        }
+      }
+      if(pack.syns && pack.syns.length>0){
+        for(const s of pack.syns){
+          const rec = {...s};
+          delete rec.id;
+          rec.id = nextId.syns++;
+          store.syns.push(rec);
+        }
+      }
+      const saved = persist();
+      doSearch(); renderSyn(); fillJudgeCate(); fillCateDatalist();
+      if(saved) showToast(`✅ 导入完成，共 ${n} 条SOP`);
+      else alert('⚠️ 已导入到当前页面，但无法写入本机存储。请导出备份。');
+    }catch(err){
+      alert("❌导入失败：" + (err && err.message ? err.message : err));
+      console.error(err);
+    }
+  };
+  reader.readAsText(f);
+  input.value = '';
+}
+
+// ========== 从旧版 IndexedDB 迁移数据（静默、带超时） ==========
+function tryMigrateFromIDB(){
+  if(!lsAvailable) return;
+  if(store.items.length || store.syns.length) return;
+  if(typeof indexedDB === 'undefined') return;
+
+  setTimeout(()=>{
+    let finished = false;
+    const done = (ok)=>{
+      if(finished) return;
+      finished = true;
+      if(ok) showToast('已迁移旧数据');
+    };
+    const timer = setTimeout(()=> done(false), 1800);
+
+    try{
+      const req = indexedDB.open('sopDB_v2', 1);
+      req.onupgradeneeded = ()=>{};
+      req.onsuccess = e=>{
+        const db = e.target.result;
+        try{
+          const tx1 = db.transaction('items','readonly');
+          const r1 = tx1.objectStore('items').getAll();
+          r1.onsuccess = ()=>{
+            const items = r1.result || [];
+            const tx2 = db.transaction('synonyms','readonly');
+            const r2 = tx2.objectStore('synonyms').getAll();
+            r2.onsuccess = ()=>{
+              const syns = r2.result || [];
+              clearTimeout(timer);
+              try{ db.close(); }catch(_){}
+              if(items.length || syns.length){
+                store.items = items;
+                store.syns = syns;
+                recalcIds();
+                persist();
+                renderSyn(); fillCateDatalist(); fillJudgeCate();
+                if(!document.getElementById('page-list').classList.contains('hidden')) renderList('');
+                done(true);
+              }else{
+                done(false);
+              }
+            };
+            r2.onerror = ()=>{ clearTimeout(timer); done(false); };
+          };
+          r1.onerror = ()=>{ clearTimeout(timer); done(false); };
+        }catch(err){
+          clearTimeout(timer); done(false);
+        }
+      };
+      req.onerror = ()=>{ clearTimeout(timer); done(false); };
+    }catch(err){
+      clearTimeout(timer); done(false);
+    }
+  }, 400);
+}
+
+// ========== 初始化 ==========
+loadStore();
+if(!lsAvailable){
+  const warn = document.getElementById('storageWarn');
+  warn.classList.remove('hidden');
+  warn.textContent = '⚠️ 当前浏览器环境无法保存到本机存储（' + lsError + '）。数据仅在当前页面有效，刷新后会丢失。请使用「SOP库 → 导出备份」保存数据。';
+}
+fillCateDatalist();
+tryMigrateFromIDB();
+</script>
+</body>
+</html>
